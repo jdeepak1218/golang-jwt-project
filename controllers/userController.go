@@ -16,16 +16,28 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/bson"
 	"go.mongodb.org/mongo-driver/mongo/bson/primitive"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var userCollection *mongo.Collection = database.OpenCollection(database.Client, "user")
 var validate = validator.New()
 
-func HashPassword() {
-
+func HashPassword(pass string) string {
+	hash,err := bcrypt.GenerateFromPassword([]byte(pass),bcrypt.DefaultCost())
+	if err != nil{
+		log.Panic(err)
+	}
+	return string(hash)
 }
-func VerifyPassword() {
-
+func VerifyPassword(userPassword string, providedPassword string) (bool, string) {
+	err := bcrypt.CompareHashAndPassword([]byte(userPassword),[]byte(providedPassword))
+	check := true
+	msg := ""
+	if err != nil{
+		msg = fmt.Sprintf("email or password is incorrect")
+		check = false
+	}
+	return check,msg
 }
 func Signup() gin.HandlerFunc{
 	return func(c *gin.Context){
@@ -60,6 +72,8 @@ func Signup() gin.HandlerFunc{
 				"error" := "Error occured while checking phone number"
 			})
 		}
+		password := HashPassword(*user.Password)
+		user.Password = &password
 		if count > 0{
 			c.JSON(http.StatusInternalServerError,gin.H{
 				"error" : "This email or phone number alread exist"
@@ -83,8 +97,47 @@ func Signup() gin.HandlerFunc{
 		c.JSON(http.StatusOK,resultInsertionNumber)
 	}
 }
-func Login() {
-
+func Login() gin.HandlerFunc{
+	return func(c *gin.Context){
+		ctx,delete := context.WithTimeout(context.Background(),100 * time.Second)
+		var user models.User
+		var foundUser models.User
+		if err := c.BindJSON(&user); err != nil{
+			c.JSON(http.StatusBadRequest,gin.H{
+				"error" : err.Error()
+			})
+			return
+		}
+		err := userCollection.FindOne(ctx,bson.M{"email":user.Email}).Decode(&foundUser)
+		if err != nil{
+			c.JSON(http.StatusUnauthorized,gin.H{
+				"error" : "email or password is incorrect"
+			})
+			return
+		}
+		verifyPass,msg := VerifyPassword(*foundUser.Password,*user.Password)
+		if verifyPass != true{
+			c.JSON(http.StatusUnauthorized,gin.H{
+				"message" : msg
+			})
+			return
+		}
+		token,refreshtoken,err := helper.GenerateAllTokens(
+			*foundUser.Email,
+			*foundUser.First_name,
+			*foundUser.Last_name,
+			*foundUser.User_type,
+			*foundUser.User_id
+		)
+		if err != nil{
+			c.JSON(http.StatusInternalServerError,gin.H{
+				"error" : err.Error()
+			})
+			return
+		}
+		helper.UpdateAllTokens(token,refreshtoken,*foundUser.User_id)
+		c.JSON(http.StatusOK,foundUser)
+	}
 }
 func GetUsers() {
 
