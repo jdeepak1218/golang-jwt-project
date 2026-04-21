@@ -79,7 +79,7 @@ func UpdateAllTokens(signedToken string, signedRefreshToken string, userId strin
 	defer cancel()
 	var updateObj primitive.D
 	updateObj = append(updateObj, bson.E{Key: "token", Value: signedToken})
-	updateObj = append(updateObj), bson.E{Key: "refresh_token", Value: signedRefreshToken}
+	updateObj = append(updateObj, bson.E{Key: "refresh_token", Value: signedRefreshToken}
 	updatedAt, _ := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
 	updateObj = append(updateObj, bson.E{Key: "updated_at", Value: updatedAt})
 	upsert := true
