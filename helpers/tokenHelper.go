@@ -1,6 +1,8 @@
 package helpers
 
 import (
+	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -39,4 +41,32 @@ func GenerateAllTokesn(email, first_name, last_name, userType, uid string) (sign
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(168 * time.Hour)),
 		},
 	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethod256, claims).SignedString([]byte(SECRET_KEY))
+	if err != nil {
+		log.Fatal(err)
+		return "", "", err
+	}
+	refreshToken, err := jwt.NewWithClaims(jwt.SigningMethod256, refreshClaims).SignedString([]byte(SECRET_KEY))
+	if err != nil {
+		log.Fatal(err)
+		return "", "", err
+	}
+	return token, refreshToken, nil
+}
+func ValidateToken(signedToken string) (*SignedDetails, string, error) {
+	token, err := jwt.ParseWithClaims(
+		signedToken,
+		&SignedDetails{},
+		func(token *jwt.Token) (interface{}, error) {
+			return []byte(SECRET_KEY), nil
+		},
+	)
+	if err != nil {
+		return nil, "", err
+	}
+	claims, ok := token.Claims.(*SignedDetails)
+	if !ok || !token.Valid {
+		return nil, "", fmt.Errorf("Token is invalid")
+	}
+	return claims, "", nil
 }
