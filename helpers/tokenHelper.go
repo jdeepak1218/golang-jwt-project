@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -9,7 +10,10 @@ import (
 	"github.com/golang-jwt-project/database"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jdeepak1218/golang-jwt-project/database"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type SignedDetails struct {
@@ -69,4 +73,27 @@ func ValidateToken(signedToken string) (*SignedDetails, string, error) {
 		return nil, "", fmt.Errorf("Token is invalid")
 	}
 	return claims, "", nil
+}
+func UpdateAllTokens(signedToken string, signedRefreshToken string, userId string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	var updateObj primitive.D
+	updateObj = append(updateObj, bson.E{Key: "token", Value: signedToken})
+	updateObj = append(updateObj), bson.E{Key: "refresh_token", Value: signedRefreshToken}
+	updatedAt, _ := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+	updateObj = append(updateObj, bson.E{Key: "updated_at", Value: updatedAt})
+	upsert := true
+	filter := bson.M{"user_id": userId}
+	opt := options.Update().SetUpsert(upsert)
+	_, err := UserCollection.UpdateOne(
+		ctx,
+		filter,
+		bson.D{Key: "$set", Value: updateObj},
+		opt,
+	)
+	if err != nil {
+		log.Panic(err)
+		return
+	}
+	fmt.Println("Tokens updated in db")
 }
