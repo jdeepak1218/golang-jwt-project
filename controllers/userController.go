@@ -6,12 +6,14 @@ import (
 	helper "golang-jwt-project/helpers"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/jdeepak1218/golang-jwt-project/database"
 	"github.com/jdeepak1218/golang-jwt-project/models"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/bson"
@@ -139,8 +141,58 @@ func Login() gin.HandlerFunc{
 		c.JSON(http.StatusOK,foundUser)
 	}
 }
-func GetUsers() {
-
+func GetUsers() gin.HandlerFunc {
+	return func(c *gin.Context){
+		err := helper.CheckUserType(c, "ADMIN")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		ctx,cancel := context.WithTimeout(context.Background(),100 * time.Second)
+		defer cancel()
+		recordPerPage,err := strconv.Atoi(c.Query("recordPerPage"))
+		if err != nil || recordPerPage < 1{
+			recordPerPage = 10
+		}
+		page,err := strconv.Atoi(c.Query("page"))
+		if err != nil || page < 1 {
+			page = 1
+		}
+		startIdx := (page - 1) * recordPerPage
+		matchStage := bson.D{{Key:"$match",Value:bson.D{}}}
+		groupStage := bson.D{{Key: "$group", Value: bson.D{
+            {Key: "_id",         Value: nil},
+            {Key: "total_count", Value: bson.D{{Key: "$sum",  Value: 1}}},
+            {Key: "data",        Value: bson.D{{Key: "$push", Value: "$$ROOT"}}},
+        }}}
+		projectStage := bson.D{{Key: "$project", Value: bson.D{
+            {Key: "_id",         Value: 0},
+            {Key: "total_count", Value: 1},
+            {Key: "user_items",  Value: bson.D{{Key: "$slice",
+                Value: []interface{}{"$data", startIndex, recordPerPage}}}},
+        }}}
+		result,err := userCollection.Aggregate(ctx,mongo.Pipeline{
+			matchStage,
+			groupStage,
+			projectStage
+		})
+		if err != nil{
+			c.JSON(http.StatusInternalServerError,gin.H{
+				"error" : "error while loading users"
+			})
+			return
+		}
+		var allUsers []bson.M
+		if err := result.All(ctx, &allUsers); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, allUsers[0])
+	}
 }
 func GetUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
