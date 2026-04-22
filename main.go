@@ -14,6 +14,7 @@ func main() {
 	}
 	router := gin.New()
 	router.Use(gin.Logger())
+	router.Use(gin.Recovery())
 	routes.AuthRoutes(router)
 	routes.UserRoutes(router)
 	router.GET("/api-1", func(c *gin.Context) {
