@@ -3,7 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
-	helper "golang-jwt-project/helpers"
+	"golang-jwt-project/helpers"
 	"log"
 	"net/http"
 	"strconv"
